@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+from urllib.parse import quote
+import shutil
+
+import requests
+from mutagen.id3 import ID3, USLT
+
+
+LYRICS_API = "https://api.lyrics.ovh/v1"
+
+
+class LyricsResult:
+    """
+    Representa el resultado de una búsqueda de lyrics.
+    """
+
+    def __init__(
+        self,
+        status,
+        artist=None,
+        title=None,
+        lyrics=None,
+        source=None,
+        message=None,
+    ):
+        self.status = status
+        self.artist = artist
+        self.title = title
+        self.lyrics = lyrics
+        self.source = source
+        self.message = message
+
+
+def get_metadata(mp3_path):
+    """
+    Lee Artist y Title desde un MP3.
+    No modifica absolutamente nada.
+    """
+
+    path = Path(mp3_path)
+
+    if not path.is_file():
+        raise FileNotFoundError(f"No existe el archivo: {path}")
+
+    tags = ID3(path)
+
+    artist = tags.get("TPE1")
+    title = tags.get("TIT2")
+
+    if not artist:
+        raise ValueError("El MP3 no tiene Artist (TPE1).")
+
+    if not title:
+        raise ValueError("El MP3 no tiene Title (TIT2).")
+
+    return {
+        "artist": str(artist),
+        "title": str(title),
+    }
+
+
+def read_existing_lyrics(mp3_path):
+    """
+    Lee lyrics USLT existentes.
+
+    Devuelve una lista de diccionarios.
+    No modifica nada.
+    """
+
+    path = Path(mp3_path)
+    tags = ID3(path)
+
+    results = []
+
+    for frame in tags.getall("USLT"):
+        results.append(
+            {
+                "language": frame.lang,
+                "description": frame.desc,
+                "text": frame.text,
+            }
+        )
+
+    return results
+
+
+def search_lyrics(artist, title):
+    """
+    Busca lyrics utilizando lyrics.ovh.
+    """
+
+    url = (
+        f"{LYRICS_API}/"
+        f"{quote(artist)}/"
+        f"{quote(title)}"
+    )
+
+    try:
+        response = requests.get(
+            url,
+            timeout=15,
+        )
+    except requests.RequestException as e:
+        return LyricsResult(
+            status="ERROR",
+            artist=artist,
+            title=title,
+            message=f"Error de conexión: {e}",
+        )
+
+    if response.status_code != 200:
+        return LyricsResult(
+            status="NOT_FOUND",
+            artist=artist,
+            title=title,
+            message=f"HTTP {response.status_code}",
+        )
+
+    try:
+        data = response.json()
+    except ValueError:
+        return LyricsResult(
+            status="ERROR",
+            artist=artist,
+            title=title,
+            message="La respuesta no contiene JSON válido.",
+        )
+
+    lyrics = data.get("lyrics")
+
+    if not lyrics:
+        return LyricsResult(
+            status="NOT_FOUND",
+            artist=artist,
+            title=title,
+            message="La API no entregó lyrics.",
+        )
+
+    lyrics = lyrics.strip()
+
+    return LyricsResult(
+        status="FOUND",
+        artist=artist,
+        title=title,
+        lyrics=lyrics,
+        source="lyrics.ovh",
+    )
+
+
+def create_backup(mp3_path):
+    """
+    Crea un backup .bak.
+    Nunca sobrescribe un backup existente.
+    """
+
+    path = Path(mp3_path)
+    backup = Path(str(path) + ".bak")
+
+    if backup.exists():
+        return backup, False
+
+    shutil.copy2(path, backup)
+
+    return backup, True
+
+
+def write_lyrics(
+    mp3_path,
+    lyrics,
+    language="eng",
+    description="Lyrics",
+    overwrite=False,
+    create_backup_file=True,
+):
+    """
+    Escribe lyrics en un MP3 mediante USLT.
+
+    Por defecto:
+    - NO sobrescribe lyrics existentes.
+    - CREA backup.
+    """
+
+    path = Path(mp3_path)
+
+    if not path.is_file():
+        raise FileNotFoundError(f"No existe el archivo: {path}")
+
+    tags = ID3(path)
+
+    existing = tags.getall("USLT")
+
+    if existing and not overwrite:
+        return {
+            "status": "ALREADY_EXISTS",
+            "message": (
+                f"El archivo ya contiene "
+                f"{len(existing)} frame(s) USLT."
+            ),
+            "backup": None,
+        }
+
+    backup = None
+    backup_created = False
+
+    if create_backup_file:
+        backup, backup_created = create_backup(path)
+
+    # Si se solicitó overwrite, eliminamos solamente
+    # los USLT que vamos a reemplazar.
+    if overwrite:
+        tags.delall("USLT")
+
+    tags.add(
+        USLT(
+            encoding=3,
+            lang=language,
+            desc=description,
+            text=lyrics,
+        )
+    )
+
+    tags.save(
+        path,
+        v2_version=3,
+    )
+
+    return {
+        "status": "WRITTEN",
+        "message": "Lyrics escritos correctamente.",
+        "backup": str(backup) if backup else None,
+        "backup_created": backup_created,
+    }
