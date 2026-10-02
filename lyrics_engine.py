@@ -13,26 +13,7 @@ from mutagen.id3 import ID3, USLT
 LYRICS_API = "https://api.lyrics.ovh/v1"
 
 
-class LyricsResult:
-    def __init__(
-        self,
-        status,
-        artist=None,
-        title=None,
-        lyrics=None,
-        source=None,
-        message=None,
-        variant=None,
-        query_title=None,
-    ):
-        self.status = status
-        self.artist = artist
-        self.title = title
-        self.lyrics = lyrics
-        self.source = source
-        self.message = message
-        self.variant = variant
-        self.query_title = query_title
+from models import LyricsResult
 
 
 def get_metadata(mp3_path):
