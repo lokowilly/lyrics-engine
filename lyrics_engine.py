@@ -1,10 +1,6 @@
-from pathlib import Path
 import re
-import shutil
 import unicodedata
-from html import unescape
 
-from mutagen.id3 import ID3, USLT
 
 from models import LyricsResult
 from metadata import get_metadata, read_existing_lyrics
