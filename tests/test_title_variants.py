@@ -2,7 +2,7 @@
 
 import unittest
 
-from lyrics_engine import generate_title_variants
+from lyrics_engine.title_variants import generate_title_variants
 
 
 class TestGenerateTitleVariants(unittest.TestCase):

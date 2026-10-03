@@ -3,12 +3,12 @@
 import argparse
 from pathlib import Path
 
-from lyrics_engine import (
+from lyrics_engine import search_lyrics
+from lyrics_engine.metadata import (
     get_metadata,
     read_existing_lyrics,
-    search_lyrics,
-    write_lyrics,
 )
+from lyrics_engine.writer import write_lyrics
 
 
 SUPPORTED_EXTENSIONS = {

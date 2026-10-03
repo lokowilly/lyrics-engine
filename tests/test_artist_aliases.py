@@ -8,8 +8,8 @@ from lyrics_engine import search_lyrics
 
 class TestArtistAliases(unittest.TestCase):
 
-    @patch("lyrics_engine.search_lyrics_lyricsweb")
-    @patch("lyrics_engine.search_lyrics_ovh")
+    @patch("lyrics_engine.engine.search_lyrics_lyricsweb")
+    @patch("lyrics_engine.engine.search_lyrics_ovh")
     def test_dont_fight_it_uses_artist_alias(
         self,
         mock_ovh,

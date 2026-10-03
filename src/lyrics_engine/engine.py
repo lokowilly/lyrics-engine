@@ -1,10 +1,8 @@
-from models import LyricsResult
-from metadata import get_metadata, read_existing_lyrics
-from writer import create_backup, write_lyrics
-from providers.lyricsweb import search_lyrics_lyricsweb
-from providers.lyrics_ovh import search_lyrics_ovh
-from aliases import get_artist_aliases
-from title_variants import generate_title_variants
+from .models import LyricsResult
+from .providers.lyricsweb import search_lyrics_lyricsweb
+from .providers.lyrics_ovh import search_lyrics_ovh
+from .aliases import get_artist_aliases
+from .title_variants import generate_title_variants
 
 def search_lyrics(artist, title):
     """

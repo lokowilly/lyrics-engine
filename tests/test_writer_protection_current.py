@@ -6,7 +6,7 @@ from pathlib import Path
 
 from mutagen.id3 import ID3, USLT
 
-from lyrics_engine import write_lyrics
+from lyrics_engine.writer import write_lyrics
 
 
 class TestWriterProtectionCurrent(unittest.TestCase):

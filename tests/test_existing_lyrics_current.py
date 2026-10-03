@@ -3,7 +3,7 @@
 import unittest
 from pathlib import Path
 
-from lyrics_engine import read_existing_lyrics
+from lyrics_engine.metadata import read_existing_lyrics
 
 
 MP3 = Path.home() / "Descargas/Musica/1998 - Greatest Hits -Steve Perry/03 - She's Mine.mp3"
