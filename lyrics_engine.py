@@ -1,23 +1,16 @@
 from pathlib import Path
-from urllib.parse import quote
 import re
 import shutil
 import unicodedata
 from html import unescape
 
-
-import requests
 from mutagen.id3 import ID3, USLT
-
-
-LYRICS_API = "https://api.lyrics.ovh/v1"
-
 
 from models import LyricsResult
 from metadata import get_metadata, read_existing_lyrics
 from writer import create_backup, write_lyrics
 from providers.lyricsweb import search_lyrics_lyricsweb
-
+from providers.lyrics_ovh import search_lyrics_ovh
 
 def generate_title_variants(title):
     """
@@ -154,45 +147,27 @@ def search_lyrics(artist, title):
 
         for variant_name, query_title in variants:
 
-            url = (
-                f"{LYRICS_API}/"
-                f"{quote(search_artist)}/"
-                f"{quote(query_title)}"
+            provider_result = search_lyrics_ovh(
+                search_artist,
+                query_title,
             )
 
-            try:
-                response = requests.get(
-                    url,
-                    timeout=15,
-                )
-
-            except requests.RequestException as e:
+            if provider_result.status == "ERROR":
 
                 return LyricsResult(
                     status="ERROR",
                     artist=artist,
                     title=title,
                     source="lyrics.ovh",
-                    message=f"Error de conexión: {e}",
+                    message=provider_result.message,
                 )
 
-            if response.status_code != 200:
-                last_message = (
-                    f"HTTP {response.status_code}"
-                )
+            if provider_result.status != "FOUND":
+
+                last_message = provider_result.message
                 continue
 
-            try:
-                data = response.json()
-
-            except ValueError:
-
-                last_message = (
-                    "Respuesta JSON inválida."
-                )
-                continue
-
-            lyrics = data.get("lyrics")
+            lyrics = provider_result.lyrics
 
             if lyrics and lyrics.strip():
 
