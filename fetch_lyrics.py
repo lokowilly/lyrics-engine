@@ -182,13 +182,12 @@ def process_file(path, mode, overwrite=False):
 
         return "ERROR"
 
-        print(f"Estado escritura: {write_result.status}")
+    print(f"Estado escritura: {write_result.status}")
 
     if write_result.message:
         print(f"Mensaje: {write_result.message}")
 
     return write_result.status
-
 
 def main():
 
