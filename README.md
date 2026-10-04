@@ -167,6 +167,12 @@ These features are planned ideas and are not necessarily implemented yet.
 
 License information will be added before the first public release.
 
+## Development assistance
+
+This project was developed with assistance from OpenAI's ChatGPT
+(GPT-5.6 Luna), used for software architecture, refactoring, testing,
+documentation, and development guidance.
+
 ## Project status
 
 This is an experimental development project.
