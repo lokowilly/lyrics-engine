@@ -104,6 +104,9 @@ def process_file(path, mode, overwrite=False):
 
     print(f"Estado : {result.status}")
 
+    if result.attempt:
+        print(f"Intento: {result.attempt}")
+
     if result.source:
         print(f"Fuente : {result.source}")
 

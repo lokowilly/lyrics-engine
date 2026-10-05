@@ -7,7 +7,7 @@ from .aliases import get_artist_aliases
 from .title_variants import generate_title_variants
 
 
-def _search_lyrics_once(artist, title):
+def _search_lyrics_once(artist, title, attempt=1):
     """
     Realiza una búsqueda completa de lyrics.
 
@@ -55,6 +55,7 @@ def _search_lyrics_once(artist, title):
                     title=title,
                     source="lyrics.ovh",
                     message=provider_result.message,
+                    attempt=attempt,
                 )
 
             if provider_result.status != "FOUND":
@@ -86,6 +87,7 @@ def _search_lyrics_once(artist, title):
                     variant=variant_name,
                     query_title=query_title,
                     message=message,
+                    attempt=attempt,
                 )
 
             last_message = (
@@ -109,7 +111,7 @@ def _search_lyrics_once(artist, title):
             # original del MP3.
             result.artist = artist
             result.title = title
-
+            result.attempt = attempt
             if search_artist != artist:
                 result.message = (
                     f"Encontrado mediante LyricsWeb"
@@ -145,6 +147,7 @@ def _search_lyrics_once(artist, title):
             if diagnostic_parts
             else "Lyrics no encontradas."
         ),
+        attempt=attempt,
     )
 
 
@@ -166,6 +169,7 @@ def search_lyrics(artist, title):
     result = _search_lyrics_once(
         artist,
         title,
+        attempt=1,
     )
 
     if result.status == "FOUND":
@@ -184,4 +188,5 @@ def search_lyrics(artist, title):
     return _search_lyrics_once(
         artist,
         title,
+        attempt=2,
     )

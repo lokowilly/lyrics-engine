@@ -9,6 +9,7 @@ class LyricsResult:
         message=None,
         variant=None,
         query_title=None,
+        attempt=None,
     ):
         self.status = status
         self.artist = artist
@@ -18,3 +19,4 @@ class LyricsResult:
         self.message = message
         self.variant = variant
         self.query_title = query_title
+        self.attempt = attempt

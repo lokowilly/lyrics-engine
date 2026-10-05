@@ -56,6 +56,9 @@ class TestEngineRetry(unittest.TestCase):
             "Estas son las letras",
         )
 
+        self.assertEqual(result.attempt, 2)
+
+
         # Debe haber dos búsquedas completas.
         self.assertEqual(
             mock_ovh.call_count,
@@ -111,6 +114,9 @@ class TestEngineRetry(unittest.TestCase):
             result.lyrics,
             "Estas son las letras",
         )
+
+        self.assertEqual(result.attempt, 2)
+
 
         # También debe haber dos búsquedas completas.
         self.assertEqual(
