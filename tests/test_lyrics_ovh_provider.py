@@ -33,8 +33,13 @@ class TestLyricsOVHProvider(unittest.TestCase):
 
         mock_get.assert_called()
 
+    @patch("lyrics_engine.engine.time.sleep")
     @patch("providers.lyrics_ovh.requests.get")
-    def test_http_error_returns_not_found(self, mock_get):
+    def test_http_error_returns_not_found(
+        self,
+        mock_get,
+        mock_sleep,
+    ):
 
         response = FakeResponse()
         response.status_code = 404
@@ -51,6 +56,7 @@ class TestLyricsOVHProvider(unittest.TestCase):
         self.assertEqual(result.title, "She's Mine")
         self.assertEqual(result.source, "lyrics.ovh")
 
+        mock_sleep.assert_called_once_with(1)
 
 if __name__ == "__main__":
     unittest.main()

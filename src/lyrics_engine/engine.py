@@ -1,18 +1,23 @@
+import time
+
 from .models import LyricsResult
 from .providers.lyricsweb import search_lyrics_lyricsweb
 from .providers.lyrics_ovh import search_lyrics_ovh
 from .aliases import get_artist_aliases
 from .title_variants import generate_title_variants
 
-def search_lyrics(artist, title):
-    """
-    Busca lyrics usando lyrics.ovh y varias variantes
-    del título.
 
-    Si no encuentra la canción, prueba LyricsWeb.
-    También permite aliases de artista para canciones
-    donde el tag del MP3 no coincide con el artista
-    utilizado por las fuentes de letras.
+def _search_lyrics_once(artist, title):
+    """
+    Realiza una búsqueda completa de lyrics.
+
+    Incluye:
+    - aliases de artista
+    - variantes de título
+    - lyrics.ovh
+    - fallback a LyricsWeb
+
+    Esta función representa UN intento completo.
     """
 
     # --------------------------------------------------
@@ -25,6 +30,7 @@ def search_lyrics(artist, title):
     )
 
     last_message = None
+    lyricsweb_message = None
 
     # --------------------------------------------------
     # Buscar en lyrics.ovh
@@ -113,10 +119,69 @@ def search_lyrics(artist, title):
 
             return result
 
+        # Guardamos el resultado de LyricsWeb para
+        # poder informar correctamente el diagnóstico.
+        lyricsweb_message = result.message
+
+    diagnostic_parts = []
+
+    if last_message:
+        diagnostic_parts.append(
+            f"lyrics.ovh: {last_message}"
+        )
+
+    if lyricsweb_message:
+        diagnostic_parts.append(
+            f"LyricsWeb: {lyricsweb_message}"
+        )
+
     return LyricsResult(
         status="NOT_FOUND",
         artist=artist,
         title=title,
         source="lyrics.ovh",
-        message=last_message or "Lyrics no encontradas.",
+        message=(
+            " | ".join(diagnostic_parts)
+            if diagnostic_parts
+            else "Lyrics no encontradas."
+        ),
+    )
+
+
+def search_lyrics(artist, title):
+    """
+    Busca lyrics realizando hasta dos búsquedas completas.
+
+    Si el primer intento termina en FOUND, retorna
+    inmediatamente.
+
+    Si termina en NOT_FOUND o ERROR, realiza un
+    segundo intento completo.
+    """
+
+    # --------------------------------------------------
+    # PRIMER INTENTO
+    # --------------------------------------------------
+
+    result = _search_lyrics_once(
+        artist,
+        title,
+    )
+
+    if result.status == "FOUND":
+        return result
+
+    # --------------------------------------------------
+    # BACKOFF ANTES DEL SEGUNDO INTENTO
+    # --------------------------------------------------
+
+    time.sleep(1)
+
+    # --------------------------------------------------
+    # SEGUNDO INTENTO
+    # --------------------------------------------------
+
+    return _search_lyrics_once(
+        artist,
+        title,
     )
