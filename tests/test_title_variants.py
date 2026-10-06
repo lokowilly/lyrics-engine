@@ -79,6 +79,61 @@ class TestGenerateTitleVariants(unittest.TestCase):
             ],
         )
 
+    def test_remastered_2003(self):
+        result = generate_title_variants(
+            "Truth Hits Everybody (Remastered 2003)"
+        )
+
+        self.assertIn(
+            ("sin_parentesis", "Truth Hits Everybody"),
+            result,
+        )
+
+    def test_remaster_2008_preserves_title_parentheses(self):
+        result = generate_title_variants(
+            "Money's Too Tight (To Mention) (2008 Remaster)"
+        )
+
+        self.assertIn(
+            (
+                "sin_sufijo_editorial",
+                "Money's Too Tight (To Mention)",
+            ),
+            result,
+        )
+
+    def test_bonus_track(self):
+        result = generate_title_variants(
+            "Baby, I Love You (bonus track)"
+        )
+
+        self.assertIn(
+            "Baby, I Love You",
+            [value for name, value in result],
+        )
+
+    def test_remaster_2005(self):
+        result = generate_title_variants(
+            "Sax and Violins (2005 Remaster)"
+        )
+
+        self.assertIn(
+            (
+                "sin_sufijo_editorial",
+                "Sax and Violins",
+            ),
+            result,
+        )
+
+    def test_radio_mix(self):
+        result = generate_title_variants(
+            "Fake (- Radio Mix)"
+        )
+
+        self.assertIn(
+            "Fake",
+            [value for name, value in result],
+        )
 
 if __name__ == "__main__":
     unittest.main()

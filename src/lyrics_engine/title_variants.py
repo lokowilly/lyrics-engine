@@ -26,14 +26,30 @@ def generate_title_variants(title):
     if dash_space != title:
         variants.append(("guion_a_espacio", dash_space))
 
-    # 4. Sin paréntesis
+    # 4. Sin sufijo editorial
+    no_editorial_suffix = re.sub(
+        r"\s*\((?:\d{4}\s+)?(?:remaster(?:ed)?|bonus\s+track)\)\s*$",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    )
+
+    if no_editorial_suffix != title:
+        variants.append(
+            (
+                "sin_sufijo_editorial",
+                no_editorial_suffix,
+            )
+        )
+
+    # 5. Sin paréntesis
     no_parentheses = re.sub(r"\s*\([^)]*\)", "", title)
     no_parentheses = re.sub(r"\s+", " ", no_parentheses).strip()
 
     if no_parentheses != title:
         variants.append(("sin_parentesis", no_parentheses))
 
-    # 5. Sin paréntesis + sin apóstrofes
+    # 6. Sin paréntesis + sin apóstrofes
     no_parentheses_apostrophe = re.sub(
         r"['’‘`´]",
         "",
@@ -48,7 +64,7 @@ def generate_title_variants(title):
             )
         )
 
-    # 6. Normalización Unicode
+    # 7. Normalización Unicode
     normalized = unicodedata.normalize("NFKD", title)
     normalized = "".join(
         c for c in normalized
@@ -58,7 +74,7 @@ def generate_title_variants(title):
     if normalized != title:
         variants.append(("unicode_normalizado", normalized))
 
-    # 7. Unicode normalizado + sin apóstrofes
+    # 8. Unicode normalizado + sin apóstrofes
     normalized_apostrophe = re.sub(
         r"['’‘`´]",
         "",
