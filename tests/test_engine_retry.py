@@ -7,6 +7,7 @@ from lyrics_engine.models import LyricsResult
 
 class TestEngineRetry(unittest.TestCase):
 
+    @patch("lyrics_engine.engine.search_lyrics_com")
     @patch("lyrics_engine.engine.time.sleep")
     @patch("lyrics_engine.engine.generate_title_variants")
     @patch("lyrics_engine.engine.search_lyrics_lyricsweb")
@@ -17,6 +18,7 @@ class TestEngineRetry(unittest.TestCase):
         mock_lyricsweb,
         mock_variants,
         mock_sleep,
+        mock_lyrics_com,
     ):
         # Una sola variante para que el test no dependa
         # de la implementación interna de title_variants.py.
@@ -45,6 +47,12 @@ class TestEngineRetry(unittest.TestCase):
             message="HTTP 404",
         )
 
+        mock_lyrics_com.return_value = LyricsResult(
+            status="NOT_FOUND",
+            source="lyrics.com",
+            message="Sin coincidencias en la prueba",
+        )
+
         result = search_lyrics(
             "Artista de prueba",
             "Canción de prueba",
@@ -66,6 +74,7 @@ class TestEngineRetry(unittest.TestCase):
         )
         mock_sleep.assert_called_once_with(1)
 
+    @patch("lyrics_engine.engine.search_lyrics_com")
     @patch("lyrics_engine.engine.time.sleep")
     @patch("lyrics_engine.engine.generate_title_variants")
     @patch("lyrics_engine.engine.search_lyrics_lyricsweb")
@@ -76,6 +85,7 @@ class TestEngineRetry(unittest.TestCase):
         mock_lyricsweb,
         mock_variants,
         mock_sleep,
+        mock_lyrics_com,
     ):
         # Una sola variante para que el test no dependa
         # de la implementación interna de title_variants.py.
@@ -104,6 +114,12 @@ class TestEngineRetry(unittest.TestCase):
             message="HTTP 404",
         )
 
+        mock_lyrics_com.return_value = LyricsResult(
+            status="NOT_FOUND",
+            source="lyrics.com",
+            message="Sin coincidencias en la prueba",
+        )
+
         result = search_lyrics(
             "Artista de prueba",
             "Canción de prueba",
@@ -123,6 +139,103 @@ class TestEngineRetry(unittest.TestCase):
             mock_ovh.call_count,
             2,
         )
+
+        mock_sleep.assert_called_once_with(1)
+
+    @patch("lyrics_engine.engine.search_lyrics_com")
+    @patch("lyrics_engine.engine.time.sleep")
+    @patch("lyrics_engine.engine.generate_title_variants")
+    @patch("lyrics_engine.engine.search_lyrics_lyricsweb")
+    @patch("lyrics_engine.engine.search_lyrics_ovh")
+    def test_returns_error_when_all_providers_fail(
+        self,
+        mock_ovh,
+        mock_lyricsweb,
+        mock_variants,
+        mock_sleep,
+        mock_lyrics_com,
+    ):
+        mock_variants.return_value = [
+            ("original", "Canción de prueba"),
+        ]
+
+        mock_ovh.return_value = LyricsResult(
+            status="ERROR",
+            source="lyrics.ovh",
+            message="Error de conexión OVH",
+        )
+
+        mock_lyricsweb.return_value = LyricsResult(
+            status="ERROR",
+            source="LyricsWeb",
+            message="Error de conexión LyricsWeb",
+        )
+
+        mock_lyrics_com.return_value = LyricsResult(
+            status="ERROR",
+            source="lyrics.com",
+            message="Error de conexión Lyrics.com",
+        )
+
+        result = search_lyrics(
+            "Artista de prueba",
+            "Canción de prueba",
+        )
+
+        self.assertEqual(result.status, "ERROR")
+        self.assertEqual(result.attempt, 2)
+        self.assertIn("lyrics.ovh", result.message)
+        self.assertIn("LyricsWeb", result.message)
+        self.assertIn("Lyrics.com", result.message)
+
+        mock_sleep.assert_called_once_with(1)
+
+
+    @patch("lyrics_engine.engine.search_lyrics_com")
+    @patch("lyrics_engine.engine.time.sleep")
+    @patch("lyrics_engine.engine.generate_title_variants")
+    @patch("lyrics_engine.engine.search_lyrics_lyricsweb")
+    @patch("lyrics_engine.engine.search_lyrics_ovh")
+    def test_mixed_provider_results_return_not_found(
+        self,
+        mock_ovh,
+        mock_lyricsweb,
+        mock_variants,
+        mock_sleep,
+        mock_lyrics_com,
+    ):
+        mock_variants.return_value = [
+            ("original", "Canción de prueba"),
+        ]
+
+        mock_ovh.return_value = LyricsResult(
+            status="ERROR",
+            source="lyrics.ovh",
+            message="Error de conexión",
+        )
+
+        mock_lyricsweb.return_value = LyricsResult(
+            status="NOT_FOUND",
+            source="LyricsWeb",
+            message="Sin coincidencias",
+        )
+
+        mock_lyrics_com.return_value = LyricsResult(
+            status="NOT_FOUND",
+            source="lyrics.com",
+            message="Sin coincidencias",
+        )
+
+        result = search_lyrics(
+            "Artista de prueba",
+            "Canción de prueba",
+        )
+
+        self.assertEqual(result.status, "NOT_FOUND")
+        self.assertEqual(result.attempt, 2)
+        self.assertIn("lyrics.ovh", result.message)
+        self.assertIn("LyricsWeb", result.message)
+        self.assertIn("Lyrics.com", result.message)
 
         mock_sleep.assert_called_once_with(1)
 

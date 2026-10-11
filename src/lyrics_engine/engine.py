@@ -3,6 +3,7 @@ import time
 from .models import LyricsResult
 from .providers.lyricsweb import search_lyrics_lyricsweb
 from .providers.lyrics_ovh import search_lyrics_ovh
+from .providers.lyrics_com import search_lyrics_com
 from .aliases import get_artist_aliases
 from .title_variants import generate_title_variants
 
@@ -11,78 +12,37 @@ def _search_lyrics_once(artist, title, attempt=1):
     """
     Realiza una búsqueda completa de lyrics.
 
-    Incluye:
-    - aliases de artista
-    - variantes de título
-    - lyrics.ovh
-    - fallback a LyricsWeb
-
-    Esta función representa UN intento completo.
+    Orden de proveedores:
+    1. lyrics.ovh con aliases y variantes del título.
+    2. LyricsWeb con aliases de artista.
+    3. Lyrics.com como último recurso.
     """
 
-    # --------------------------------------------------
-    # ALIASES DE ARTISTA
-    # --------------------------------------------------
-
-    artist_aliases = get_artist_aliases(
-        artist,
-        title,
-    )
-
-    last_message = None
-    lyricsweb_message = None
+    artist_aliases = get_artist_aliases(artist, title)
+    last_messages = {}
+    last_statuses = {}
 
     # --------------------------------------------------
-    # Buscar en lyrics.ovh
+    # PROVEEDOR 1: lyrics.ovh
     # --------------------------------------------------
 
     for search_artist in artist_aliases:
-
         variants = generate_title_variants(title)
 
         for variant_name, query_title in variants:
+            result = search_lyrics_ovh(search_artist, query_title)
 
-            provider_result = search_lyrics_ovh(
-                search_artist,
-                query_title,
-            )
-
-            if provider_result.status == "ERROR":
-
-                return LyricsResult(
-                    status="ERROR",
-                    artist=artist,
-                    title=title,
-                    source="lyrics.ovh",
-                    message=provider_result.message,
-                    attempt=attempt,
-                )
-
-            if provider_result.status != "FOUND":
-
-                last_message = provider_result.message
-                continue
-
-            lyrics = provider_result.lyrics
-
-            if lyrics and lyrics.strip():
-
-                message = (
-                    f"Encontrado mediante variante: "
-                    f"{variant_name}"
-                )
+            if result.status == "FOUND" and result.lyrics:
+                message = f"Encontrado mediante variante: {variant_name}"
 
                 if search_artist != artist:
-                    message += (
-                        f" | artista alternativo: "
-                        f"{search_artist}"
-                    )
+                    message += f" | artista alternativo: {search_artist}"
 
                 return LyricsResult(
                     status="FOUND",
                     artist=artist,
                     title=title,
-                    lyrics=lyrics.strip(),
+                    lyrics=result.lyrics.strip(),
                     source="lyrics.ovh",
                     variant=variant_name,
                     query_title=query_title,
@@ -90,58 +50,67 @@ def _search_lyrics_once(artist, title, attempt=1):
                     attempt=attempt,
                 )
 
-            last_message = (
-                "La respuesta no contiene lyrics."
-            )
+            last_messages["lyrics.ovh"] = result.message
+            last_statuses["lyrics.ovh"] = result.status
 
     # --------------------------------------------------
-    # FALLBACK: LyricsWeb
+    # PROVEEDOR 2: LyricsWeb
     # --------------------------------------------------
 
     for search_artist in artist_aliases:
+        result = search_lyrics_lyricsweb(search_artist, title)
 
-        result = search_lyrics_lyricsweb(
-            search_artist,
-            title,
-        )
-
-        if result.status == "FOUND":
-
-            # Conservamos como artista el artista
-            # original del MP3.
+        if result.status == "FOUND" and result.lyrics:
             result.artist = artist
             result.title = title
             result.attempt = attempt
+
             if search_artist != artist:
                 result.message = (
-                    f"Encontrado mediante LyricsWeb"
-                    f" | artista alternativo: "
-                    f"{search_artist}"
+                    "Encontrado mediante LyricsWeb"
+                    f" | artista alternativo: {search_artist}"
                 )
 
             return result
 
-        # Guardamos el resultado de LyricsWeb para
-        # poder informar correctamente el diagnóstico.
-        lyricsweb_message = result.message
+        last_messages["LyricsWeb"] = result.message
+        last_statuses["LyricsWeb"] = result.status
 
-    diagnostic_parts = []
+    # --------------------------------------------------
+    # PROVEEDOR 3: Lyrics.com
+    # --------------------------------------------------
 
-    if last_message:
-        diagnostic_parts.append(
-            f"lyrics.ovh: {last_message}"
-        )
+    result = search_lyrics_com(artist, title)
 
-    if lyricsweb_message:
-        diagnostic_parts.append(
-            f"LyricsWeb: {lyricsweb_message}"
-        )
+    if result.status == "FOUND" and result.lyrics:
+        result.artist = artist
+        result.title = title
+        result.attempt = attempt
+        return result
+
+    last_messages["Lyrics.com"] = result.message
+    last_statuses["Lyrics.com"] = result.status
+
+    # --------------------------------------------------
+    # DIAGNÓSTICO FINAL
+    # --------------------------------------------------
+
+    diagnostic_parts = [
+        f"{provider}: {message}"
+        for provider, message in last_messages.items()
+        if message
+    ]
+
+    all_providers_failed = (
+        len(last_statuses) == 3
+        and all(status == "ERROR" for status in last_statuses.values())
+    )
 
     return LyricsResult(
-        status="NOT_FOUND",
+        status="ERROR" if all_providers_failed else "NOT_FOUND",
         artist=artist,
         title=title,
-        source="lyrics.ovh",
+        source=None,
         message=(
             " | ".join(diagnostic_parts)
             if diagnostic_parts
@@ -153,40 +122,14 @@ def _search_lyrics_once(artist, title, attempt=1):
 
 def search_lyrics(artist, title):
     """
-    Busca lyrics realizando hasta dos búsquedas completas.
-
-    Si el primer intento termina en FOUND, retorna
-    inmediatamente.
-
-    Si termina en NOT_FOUND o ERROR, realiza un
-    segundo intento completo.
+    Busca lyrics realizando hasta dos intentos completos.
     """
 
-    # --------------------------------------------------
-    # PRIMER INTENTO
-    # --------------------------------------------------
-
-    result = _search_lyrics_once(
-        artist,
-        title,
-        attempt=1,
-    )
+    result = _search_lyrics_once(artist, title, attempt=1)
 
     if result.status == "FOUND":
         return result
 
-    # --------------------------------------------------
-    # BACKOFF ANTES DEL SEGUNDO INTENTO
-    # --------------------------------------------------
-
     time.sleep(1)
 
-    # --------------------------------------------------
-    # SEGUNDO INTENTO
-    # --------------------------------------------------
-
-    return _search_lyrics_once(
-        artist,
-        title,
-        attempt=2,
-    )
+    return _search_lyrics_once(artist, title, attempt=2)
