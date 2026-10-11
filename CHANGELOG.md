@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Independent lyrics provider modules.
 - `lyrics.ovh` provider.
 - `LyricsWeb` provider.
+- `Lyrics.com` provider as a final fallback.
 - Artist and title alias support.
 - Title variant generation for lyrics searches.
 - MP3 metadata reading.
@@ -44,13 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Testing
 
-- Automated test suite currently contains 14 tests.
+- Automated test suite currently contains 31 tests.
 - Tested against a real collection of 18 MP3 files.
 - Verified USLT writing and existing-lyrics protection.
 - Verified metadata reading from real MP3 files.
 - Verified title variants and aliases.
 - Verified lyrics audit results for 18 files with USLT frames.
 - Verified that no duplicate USLT frames were created.
+- Verified real lyrics retrieval through Lyrics.com.
+- Verified the Lyrics.com fallback in the complete engine using controlled test conditions.
+- Confirmed that provider integration tests do not modify MP3 files.
 
 ### Documentation
 
