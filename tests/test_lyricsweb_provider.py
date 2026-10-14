@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from providers.lyricsweb import search_lyrics_lyricsweb
+from lyrics_engine.providers.lyricsweb import search_lyrics_lyricsweb
 
 
 class FakeResponse:
@@ -21,7 +21,7 @@ class FakeResponse:
 
 class TestLyricsWebProvider(unittest.TestCase):
 
-    @patch("providers.lyricsweb.requests.get")
+    @patch("lyrics_engine.providers.lyricsweb.requests.get")
     def test_extracts_lyrics(self, mock_get):
 
         mock_get.return_value = FakeResponse()
@@ -46,7 +46,7 @@ class TestLyricsWebProvider(unittest.TestCase):
 
         mock_get.assert_called_once()
 
-    @patch("providers.lyricsweb.requests.get")
+    @patch("lyrics_engine.providers.lyricsweb.requests.get")
     def test_http_error(self, mock_get):
 
         response = FakeResponse()
@@ -62,6 +62,24 @@ class TestLyricsWebProvider(unittest.TestCase):
         self.assertEqual(result.source, "lyricsweb")
         self.assertEqual(result.artist, "Steve Perry")
         self.assertEqual(result.title, "Against the Wall")
+
+
+    @patch("lyrics_engine.providers.lyricsweb.requests.get")
+    def test_continues_after_404_with_title_variant(self, mock_get):
+        respuesta_404 = FakeResponse()
+        respuesta_404.status_code = 404
+
+        respuesta_correcta = FakeResponse()
+        mock_get.side_effect = [respuesta_404, respuesta_correcta]
+
+        result = search_lyrics_lyricsweb(
+            "Simply Red",
+            "A New Flame (2008 Remaster)",
+        )
+
+        self.assertEqual(result.status, "FOUND")
+        self.assertEqual(result.source, "lyricsweb")
+        self.assertEqual(mock_get.call_count, 2)
 
 
 if __name__ == "__main__":
