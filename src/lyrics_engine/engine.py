@@ -4,6 +4,7 @@ from .models import LyricsResult
 from .providers.lyricsweb import search_lyrics_lyricsweb
 from .providers.lyrics_ovh import search_lyrics_ovh
 from .providers.lyrics_com import search_lyrics_com
+from .providers.lrclib import search_lyrics_lrclib
 from .aliases import get_artist_aliases
 from .title_variants import generate_title_variants
 
@@ -92,6 +93,21 @@ def _search_lyrics_once(artist, title, attempt=1):
     last_statuses["Lyrics.com"] = result.status
 
     # --------------------------------------------------
+    # PROVEEDOR 4: LRCLIB
+    # --------------------------------------------------
+
+    result = search_lyrics_lrclib(artist, title)
+
+    if result.status == "FOUND" and result.lyrics:
+        result.artist = artist
+        result.title = title
+        result.attempt = attempt
+        return result
+
+    last_messages["LRCLIB"] = result.message
+    last_statuses["LRCLIB"] = result.status
+
+    # --------------------------------------------------
     # DIAGNÓSTICO FINAL
     # --------------------------------------------------
 
@@ -102,7 +118,7 @@ def _search_lyrics_once(artist, title, attempt=1):
     ]
 
     all_providers_failed = (
-        len(last_statuses) == 3
+        len(last_statuses) == 4
         and all(status == "ERROR" for status in last_statuses.values())
     )
 

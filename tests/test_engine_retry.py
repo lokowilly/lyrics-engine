@@ -142,6 +142,7 @@ class TestEngineRetry(unittest.TestCase):
 
         mock_sleep.assert_called_once_with(1)
 
+    @patch("lyrics_engine.engine.search_lyrics_lrclib")
     @patch("lyrics_engine.engine.search_lyrics_com")
     @patch("lyrics_engine.engine.time.sleep")
     @patch("lyrics_engine.engine.generate_title_variants")
@@ -154,6 +155,7 @@ class TestEngineRetry(unittest.TestCase):
         mock_variants,
         mock_sleep,
         mock_lyrics_com,
+        mock_lrclib,
     ):
         mock_variants.return_value = [
             ("original", "Canción de prueba"),
@@ -175,6 +177,12 @@ class TestEngineRetry(unittest.TestCase):
             status="ERROR",
             source="lyrics.com",
             message="Error de conexión Lyrics.com",
+        )
+
+        mock_lrclib.return_value = LyricsResult(
+            status="ERROR",
+            source="LRCLIB",
+            message="Error de conexión LRCLIB",
         )
 
         result = search_lyrics(
