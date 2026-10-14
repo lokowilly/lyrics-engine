@@ -61,7 +61,9 @@ music/
 │       └── providers/
 │           ├── __init__.py
 │           ├── lyrics_ovh.py
-│           └── lyricsweb.py
+│           ├── lyricsweb.py
+│           ├── lyrics_com.py
+│           └── lrclib.py
 └── tests/
 ```
 
@@ -121,6 +123,8 @@ The current engine uses:
 
 - lyrics.ovh
 - LyricsWeb
+- Lyrics.com
+- LRCLIB
 
 Provider-specific code is isolated under:
 
@@ -165,7 +169,9 @@ These features are planned ideas and are not necessarily implemented yet.
 
 ## License
 
-License information will be added before the first public release.
+This project is licensed under the MIT License. See LICENSE for details.
+
+The MIT license applies to this project's code, not to third-party lyrics or provider services. Each provider may have its own terms, attribution requirements, and usage restrictions.
 
 ## Development assistance
 
