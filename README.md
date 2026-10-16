@@ -3,8 +3,8 @@
 Extensible Python lyrics engine for music metadata applications.
 
 Lyrics Engine searches for song lyrics using multiple providers, applies
-controlled artist aliases and title variants, and can write the result
-directly into MP3 ID3 `USLT` frames.
+controlled artist aliases and title variants, and can write the result into MP3 ID3 `USLT` frames or FLAC
+Vorbis `LYRICS` comments.
 
 The project is designed as an independent library so it can later be used
 by applications such as metadata editors, music managers and Puddletag
@@ -14,17 +14,29 @@ extensions.
 
 This project is currently under active development.
 
-The core lyrics engine is functional and has been tested against a real
-music collection.
+The core lyrics engine supports MP3 and FLAC files.
 
-Current validation:
+Collection inventory:
 
-- 18 MP3 files processed
+- 477 MP3 files
+- 341 FLAC files
+- 818 audio files in total
+
+These figures describe the current collection inventory, not the number of
+files processed by Lyrics Engine.
+
+Historical MP3 validation:
+
+- 18 MP3 files audited
 - 18 files containing lyrics
 - 18 valid `USLT` frames
 - 0 duplicate lyric frames
 - 0 files without lyrics
-- 14 automated tests passing
+
+Current project validation:
+
+- 42 automated tests passed in the latest full test run
+- FLAC writing and existing-lyrics protection tested on temporary copies
 - Backup protection before lyric modification
 - Dry-run mode available
 
@@ -39,6 +51,8 @@ Current validation:
 - Protection against accidental overwriting
 - Automatic `.bak` backup before modification
 - MP3 ID3 `USLT` writing
+- FLAC Vorbis `LYRICS` writing
+- MP3 and FLAC metadata reading
 - Dry-run mode
 - Python package structure
 - Automated tests
@@ -104,7 +118,7 @@ For a safe preview without modifying files:
 python fetch_lyrics.py --dry-run "/path/to/music"
 ```
 
-The dry-run mode does not modify the MP3 files.
+The dry-run mode does not modify audio files.
 
 ## Safety
 
@@ -112,8 +126,8 @@ Lyrics Engine is designed to avoid accidental data loss.
 
 By default, existing lyrics are not overwritten.
 
-Before writing new lyrics to an MP3 file, the application creates a
-`.bak` backup when one does not already exist.
+Before writing new lyrics to an MP3 or FLAC file, the application
+creates a `.bak` backup when one does not already exist.
 
 Overwriting existing lyrics requires the explicit `--overwrite` option.
 

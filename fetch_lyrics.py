@@ -13,6 +13,7 @@ from lyrics_engine.writer import write_lyrics
 
 SUPPORTED_EXTENSIONS = {
     ".mp3",
+    ".flac",
 }
 
 
@@ -80,7 +81,7 @@ def process_file(path, mode, overwrite=False):
 
         print()
         print("⏭️  Ya contiene lyrics.")
-        print(f"    USLT encontrados: {len(existing)}")
+        print(f"    Registros de lyrics existentes: {len(existing)}")
 
         return "ALREADY_EXISTS"
 
@@ -231,6 +232,12 @@ def main():
         help="Permitir reemplazar lyrics existentes.",
     )
 
+    parser.add_argument(
+        "--flac-only",
+        action="store_true",
+        help="Procesar exclusivamente archivos FLAC.",
+    )
+
     args = parser.parse_args()
 
     folder = Path(args.folder).expanduser()
@@ -268,11 +275,15 @@ def main():
 
     files = find_audio_files(folder)
 
-    print(f"Archivos MP3 encontrados: {len(files)}")
+    if args.flac_only:
+        files = [path for path in files if path.suffix.lower() == ".flac"]
+        print("Filtro activo: exclusivamente FLAC.")
+
+    print(f"Archivos de audio compatibles encontrados: {len(files)}")
 
     if not files:
 
-        print("No hay archivos MP3.")
+        print("No hay archivos MP3 ni FLAC.")
         return
 
     # --------------------------------------------------------

@@ -2,45 +2,49 @@
 
 ## Overview
 
-Lyrics Engine is designed as a modular Python library for searching, retrieving and safely storing song lyrics in MP3 files.
+Lyrics Engine is a modular Python library for searching and retrieving song lyrics and safely storing them in MP3 and FLAC files.
 
 The core engine is independent from any specific music application. This allows the same functionality to be used from a command-line tool, a future Puddletag integration, or other applications.
 
 The architecture separates:
 
-- Search orchestration
+- Search orchestration and retry handling
 - Result representation
-- Artist aliases
-- Title variants
-- Lyrics providers
-- MP3 metadata reading
+- Artist aliases and title variants
+- Independent lyrics providers
+- Audio metadata reading (MP3 and FLAC)
 - Lyrics writing and file protection
 
-The main search flow is:
+The search engine tries four providers in sequence. If the first complete search attempt does not find lyrics, it waits one second and performs one more complete attempt.
 
 ```text
-MP3 metadata
-     │
-     ▼
-   engine.py
-     │
-     ├── artist aliases
-     │
-     ├── title variants
-     │
-     ▼
- lyrics.ovh
-     │
-     ├── FOUND ───────────────► LyricsResult
-     │
-     └── NOT_FOUND
-             │
-             ▼
-         LyricsWeb
-             │
-             ▼
-        LyricsResult
+Artist and title
+       |
+       v
+    engine.py
+       |
+       +--> Artist aliases and title variants
+       |
+       v
+    lyrics.ovh
+       |
+       | Not found
+       v
+    LyricsWeb
+       |
+       | Not found
+       v
+    Lyrics.com
+       |
+       | Not found
+       v
+     LRCLIB
+       |
+       v
+   LyricsResult
 ```
+
+A successful result stops the search. If neither complete attempt finds lyrics, the engine returns `NOT_FOUND` or `ERROR`, depending on the provider results.
 
 ---
 
@@ -48,14 +52,14 @@ MP3 metadata
 
 ```text
 lyrics-engine/
-│
 ├── fetch_lyrics.py
 ├── pyproject.toml
 ├── README.md
 ├── LICENSE
 ├── CONTRIBUTING.md
 ├── CHANGELOG.md
-│
+├── docs/
+│   └── ARCHITECTURE.md
 ├── src/
 │   └── lyrics_engine/
 │       ├── __init__.py
@@ -65,45 +69,45 @@ lyrics-engine/
 │       ├── models.py
 │       ├── title_variants.py
 │       ├── writer.py
-│       │
 │       └── providers/
 │           ├── __init__.py
 │           ├── lyrics_ovh.py
-│           └── lyricsweb.py
-│
+│           ├── lyricsweb.py
+│           ├── lyrics_com.py
+│           └── lrclib.py
 └── tests/
     └── ...
 ```
 
----
 
 # Core Components
 
 ## `engine.py`
 
-The engine is the main orchestration layer.
+The engine is the main orchestration layer. It coordinates the lyrics search process without implementing provider-specific HTTP logic or modifying audio files.
 
-Its responsibility is to coordinate the search process without implementing provider-specific HTTP logic or MP3 modification.
-
-The main function is:
+The main public function is:
 
 ```python
 search_lyrics(artist, title)
 ```
 
-The engine:
+During each complete search attempt, the engine performs the following operations:
 
 1. Receives the artist and title.
-2. Obtains possible artist aliases.
-3. Generates title variants.
-4. Searches `lyrics.ovh`.
-5. Returns the first valid result.
-6. Uses LyricsWeb as a fallback when lyrics.ovh does not find the lyrics.
-7. Returns a standardized `LyricsResult`.
+2. Obtains possible artist aliases using `get_artist_aliases()`.
+3. Generates title variants using `generate_title_variants()` for searches with lyrics.ovh.
+4. Searches lyrics.ovh using artist aliases and title variants.
+5. Searches LyricsWeb using artist aliases.
+6. Searches Lyrics.com.
+7. Searches LRCLIB.
+8. Returns the first valid result as a `LyricsResult`.
 
-The engine does not write to MP3 files.
+If no provider returns lyrics during the first attempt, the engine waits one second and repeats the complete search once. Therefore, it performs at most two complete search attempts.
 
-This separation is intentional: searching for lyrics and modifying an MP3 are independent operations.
+If no lyrics are found after both attempts, the engine returns `ERROR` when all four providers report the `ERROR` status. Otherwise, it returns `NOT_FOUND`.
+
+The engine does not write lyrics to audio files. Searching for lyrics and modifying audio files are independent operations.
 
 ---
 
@@ -220,7 +224,7 @@ When Youre In Love
 
 Duplicates are removed while preserving the original order.
 
-The title variant generator does not perform network requests and does not modify MP3 files.
+The title variant generator does not perform network requests and does not modify audio files.
 
 ---
 
@@ -269,7 +273,7 @@ The provider does not:
 
 - Generate title variants
 - Generate artist aliases
-- Modify MP3 files
+- Modify audio files
 
 Those responsibilities belong to other modules.
 
@@ -301,38 +305,103 @@ The provider:
 
 LyricsWeb is used as a fallback after lyrics.ovh has failed to find the requested lyrics.
 
-The provider does not modify MP3 files.
+The provider does not modify audio files.
 
 ---
 
-# MP3 Metadata
+## `providers/lyrics_com.py`
+
+This module implements the Lyrics.com provider.
+
+The main search function is:
+
+```python
+search_lyrics_com(artist, title)
+```
+
+The provider:
+
+1. Builds a search URL using the supplied artist and title.
+2. Performs an HTTP request with a 20-second timeout.
+3. Extracts candidate links pointing to Lyrics.com lyric pages.
+4. Accepts only links hosted on Lyrics.com with supported lyric URL paths.
+5. Compares the candidate artist and title with the requested metadata after normalizing case, punctuation and whitespace.
+6. Downloads and parses the selected lyric page.
+7. Validates the artist and title shown on the page.
+8. Extracts the lyrics from the `pre#lyric-body-text` element.
+9. Converts HTML line breaks, removes HTML tags and decodes HTML entities.
+10. Returns a `LyricsResult`.
+
+The module also provides `parse_lyrics_page()`, which parses supplied HTML without making a network request, and `search_lyrics_lyrics_com()`, which downloads and parses a specific URL.
+
+Lyrics.com is called after LyricsWeb by the engine. It receives the original artist and title, rather than the aliases and title variants used by the first two providers.
+
+The provider does not modify audio files.
+
+---
+
+## `providers/lrclib.py`
+
+This module implements the LRCLIB API provider.
+
+The main function is:
+
+```python
+search_lyrics_lrclib(artist, title)
+```
+
+The provider:
+
+1. Queries the LRCLIB search API using the supplied artist and title.
+2. Sends a User-Agent header and uses a 15-second timeout.
+3. Handles connection errors, rate limiting, server errors and unexpected HTTP responses.
+4. Parses the JSON response and validates its structure.
+5. Compares candidate artist and title metadata after normalizing case, accents, punctuation and whitespace.
+6. Prefers non-empty `plainLyrics` when available.
+7. If plain lyrics are unavailable, converts `syncedLyrics` into plain text by removing leading timestamp markers.
+8. Returns the first exact metadata match that contains usable lyrics as a `LyricsResult`.
+
+LRCLIB is called after Lyrics.com by the engine and receives the original artist and title.
+
+The provider does not modify audio files or log lyric content.
+
+# Audio Metadata
 
 ## `metadata.py`
 
-`metadata.py` is responsible for reading MP3 metadata.
+`metadata.py` is responsible for reading artist, title and existing lyrics metadata from supported audio files: MP3 and FLAC.
 
 It currently provides two main functions:
 
 ```python
-get_metadata(mp3_path)
+get_metadata(audio_path)
 ```
 
 and:
 
 ```python
-read_existing_lyrics(mp3_path)
+read_existing_lyrics(audio_path)
 ```
 
 ### `get_metadata()`
 
-Reads the ID3 artist and title frames:
+The metadata format depends on the file type.
+
+For MP3 files, it reads the ID3 artist and title frames:
 
 ```text
 TPE1 → Artist
 TIT2 → Title
 ```
 
-The function does not modify the MP3.
+For FLAC files, it reads Vorbis comments:
+
+```text
+ARTIST → Artist
+TITLE  → Title
+```
+
+The function does not modify the audio file.
 
 It returns a `LyricsResult` containing the artist and title when successful.
 
@@ -340,28 +409,30 @@ If the required metadata cannot be read, an `ERROR` result is returned.
 
 ### `read_existing_lyrics()`
 
-Reads existing ID3 `USLT` frames.
+This function reads existing lyrics without modifying the audio file.
 
-The function does not modify the MP3.
+For MP3, it reads ID3 `USLT` frames.
 
-If the file cannot be read, it returns an empty list rather than modifying or damaging the file.
+For FLAC, it reads the `LYRICS` Vorbis comment.
 
-Keeping metadata reading separate from the search engine allows the engine to operate independently of a particular MP3-reading workflow.
+If the file cannot be read, the function returns an empty list rather than modifying or damaging the file.
+
+Keeping metadata reading separate from the search engine allows the engine to operate independently of a particular audio format.
 
 ---
 
-# MP3 Lyrics Writing
+# Lyrics Writing
 
 ## `writer.py`
 
-`writer.py` contains the functionality that modifies MP3 files.
+`writer.py` contains the functionality that writes lyrics to supported MP3 and FLAC files.
 
 This module is deliberately separated from the search engine.
 
-The main functions are:
+The main functions include:
 
 ```python
-create_backup(mp3_path)
+create_backup(audio_path)
 ```
 
 and:
@@ -374,10 +445,13 @@ write_lyrics(...)
 
 ## Backup Protection
 
-Before modifying an MP3, the writer creates a backup:
+Before modifying an audio file, the writer creates a backup using the original filename with `.bak` appended.
+
+Examples:
 
 ```text
 filename.mp3.bak
+filename.flac.bak
 ```
 
 An existing backup is not overwritten.
@@ -386,27 +460,15 @@ This provides a recovery point before changing the original file.
 
 ---
 
-## Existing Lyrics Protection
+## Format-Specific Lyrics Writing
 
-Before writing, `write_lyrics()` checks for existing `USLT` frames.
+The lyrics are stored differently depending on the audio format.
 
-By default:
+For MP3, the writer uses ID3 `USLT` frames and saves the file using ID3 version 2.3.
 
-```python
-overwrite=False
-```
+For FLAC, the writer stores the lyrics in the `LYRICS` Vorbis comment.
 
-If lyrics already exist, the function returns:
-
-```text
-ALREADY_EXISTS
-```
-
-and does not modify the MP3.
-
-This prevents existing lyrics from being silently destroyed.
-
----
+The writer checks for existing lyrics before writing. By default, existing lyrics are protected unless overwrite is explicitly enabled.
 
 ## Explicit Overwrite
 
@@ -416,15 +478,19 @@ When:
 overwrite=True
 ```
 
-the existing `USLT` frames are removed before the new lyrics are written.
+the writer explicitly replaces existing lyrics in the supported audio format.
+
+For MP3 files, existing ID3 `USLT` frames are removed before the new lyrics are written.
+
+For FLAC files, the existing `LYRICS` Vorbis comment is removed before the new lyrics are stored.
 
 This makes overwriting an explicit operation rather than an accidental side effect.
 
 ---
 
-## USLT Writing
+## MP3 USLT Writing
 
-Lyrics are stored in an ID3 `USLT` frame.
+For MP3 files, lyrics are stored in an ID3 `USLT` frame.
 
 The current implementation uses:
 
@@ -436,6 +502,10 @@ encoding = 3
 
 The file is saved using ID3 version 2.3.
 
+---
+
+## Write Results
+
 The writer returns:
 
 ```text
@@ -443,6 +513,14 @@ WRITTEN
 ```
 
 when the operation succeeds.
+
+If lyrics already exist and `overwrite=False`, it returns:
+
+```text
+ALREADY_EXISTS
+```
+
+without replacing them.
 
 If an exception occurs, it returns:
 
@@ -452,7 +530,7 @@ ERROR
 
 with an explanatory message.
 
----
+For FLAC files, lyrics are stored in the `LYRICS` Vorbis comment rather than an ID3 `USLT` frame.
 
 # Separation of Responsibilities
 
@@ -460,14 +538,16 @@ A key design principle of Lyrics Engine is that each component has one primary r
 
 | Component | Responsibility |
 |---|---|
-| `engine.py` | Search orchestration |
+| `engine.py` | Search orchestration and retry handling |
 | `models.py` | Standard result representation |
 | `aliases.py` | Artist aliases |
 | `title_variants.py` | Title normalization and variants |
 | `lyrics_ovh.py` | lyrics.ovh communication |
 | `lyricsweb.py` | LyricsWeb communication and extraction |
-| `metadata.py` | MP3 metadata and USLT reading |
-| `writer.py` | Safe MP3 modification |
+| `lyrics_com.py` | Lyrics.com communication and extraction |
+| `lrclib.py` | LRCLIB API communication and extraction |
+| `metadata.py` | MP3/FLAC metadata and existing lyrics reading |
+| `writer.py` | Safe MP3/FLAC lyrics writing and backup protection |
 | `fetch_lyrics.py` | Command-line/application entry point |
 
 This separation makes the project easier to test, maintain and extend.
@@ -494,71 +574,79 @@ generate_title_variants()
 Title candidates
       │
       ▼
-lyrics.ovh
+Search providers
+(lyrics.ovh, LyricsWeb, Lyrics.com, LRCLIB)
       │
       ├── FOUND ───────────────► LyricsResult
       │
       └── NOT_FOUND
                │
                ▼
-          LyricsWeb
+       Retry handling
+       (when applicable)
                │
                ▼
           LyricsResult
 ```
 
-The engine keeps the original artist and title from the MP3 as the identity of the requested song, even when an alternative artist or title is used for the external search.
+The engine keeps the original artist and title from the audio file as the identity of the requested song, even when an alternative artist or title is used for the external search.
 
 ---
+
 
 # Write Flow
 
 Searching and writing are separate operations.
 
-A typical MP3 workflow is:
+A typical audio-file workflow is:
 
 ```text
-MP3
- │
- ▼
+MP3 or FLAC
+     │
+     ▼
 get_metadata()
- │
- ▼
+     │
+     ▼
 Artist + Title
- │
- ▼
+     │
+     ▼
 search_lyrics()
- │
- ▼
+     │
+     ▼
 LyricsResult
- │
- ├── FOUND
- │     │
- │     ▼
- │   write_lyrics()
- │     │
- │     ├── Existing USLT?
- │     │      │
- │     │      ├── Yes + overwrite=False
- │     │      │        └── ALREADY_EXISTS
- │     │      │
- │     │      └── No
- │     │
- │     ▼
- │   create_backup()
- │     │
- │     ▼
- │   Write USLT
- │     │
- │     ▼
- │   WRITTEN
- │
- └── NOT_FOUND / ERROR
+     │
+     ├── FOUND
+     │     │
+     │     ▼
+     │   write_lyrics()
+     │     │
+     │     ├── Lyrics already exist?
+     │     │      │
+     │     │      ├── Yes + overwrite=False
+     │     │      │        └── ALREADY_EXISTS
+     │     │      │
+     │     │      └── No, or overwrite=True
+     │     │
+     │     ▼
+     │   create_backup()
+     │     │
+     │     ▼
+     │   Write lyrics
+     │     │
+     │     ├── MP3: ID3 USLT frame
+     │     │
+     │     └── FLAC: LYRICS Vorbis comment
+     │     │
+     │     ▼
+     │   WRITTEN
+     │
+     └── NOT_FOUND / ERROR
 ```
 
-This design prevents a failed lyrics search from modifying the MP3.
+This design prevents a failed lyrics search from modifying the audio file. Existing lyrics are protected unless overwriting is explicitly enabled. Before a file is modified, the writer creates a backup.
 
 ---
+
 
 # Provider Independence
 
@@ -579,7 +667,7 @@ A provider should:
 - Handle network failures.
 - Handle unexpected responses.
 - Return a `LyricsResult`.
-- Avoid modifying MP3 files.
+- Avoid modifying audio files.
 - Be independently testable.
 
 The engine decides when and how providers are used.
@@ -593,20 +681,21 @@ The project uses automated tests to verify individual components and complete be
 Tests cover areas including:
 
 - Result model behavior
-- Metadata extraction
-- Existing USLT detection
+- MP3 and FLAC metadata extraction
+- Existing lyrics detection
 - Title variants
 - Artist aliases
-- Lyrics writing
+- Lyrics writing for supported audio formats
 - Existing lyrics protection
-- Real MP3 metadata
+- MP3 and FLAC file handling
 - Lyrics audit behavior
 
 External providers should be tested without depending unnecessarily on live websites. Network behavior can be isolated or mocked so that provider tests remain predictable.
 
-The project also has been tested against a real collection of MP3 files.
+The project has also been tested against a real collection of MP3 files. FLAC writing and existing-lyrics protection have been tested separately using temporary files.
 
 ---
+
 
 # Puddletag Integration
 
@@ -629,9 +718,9 @@ The planned architecture is:
 │      writer               │
 └─────────────┬─────────────┘
               │
-      ┌───────┼────────┐
-      ▼       ▼        ▼
-  lyrics.ovh LyricsWeb  future
+      ┌───────┼────────┬───────────┐
+      ▼       ▼        ▼           ▼
+ lyrics.ovh LyricsWeb Lyrics.com  LRCLIB
 ```
 
 The Puddletag layer should provide application-specific user interface behavior while keeping the lyrics engine reusable outside Puddletag.
@@ -646,11 +735,11 @@ Lyrics Engine follows several important design principles.
 
 ## Separation of concerns
 
-Searching, metadata reading, provider communication and MP3 writing are separate responsibilities.
+Searching, metadata reading, provider communication and audio-file writing are separate responsibilities.
 
 ## Safe modification
 
-MP3 files should not be modified unexpectedly.
+Audio files should not be modified unexpectedly.
 
 Existing lyrics are protected by default and backups are created before modification.
 

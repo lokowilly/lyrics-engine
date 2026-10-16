@@ -71,7 +71,6 @@ Planned areas of development include:
 - Additional lyrics providers.
 - More comprehensive provider tests.
 - Provider attribution and licensing documentation.
-- Architecture documentation.
 - Puddletag integration.
 - A dedicated Puddletag plugin layer independent from the core engine.
 - Improved CLI documentation and user workflows.
